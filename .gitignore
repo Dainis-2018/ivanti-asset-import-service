@@ -33,6 +33,7 @@ Thumbs.db
 # Testing
 coverage/
 .nyc_output/
+my-config.json
 
 # Temporary files
 tmp/

@@ -1,0 +1,10 @@
+{
+  "IntegrationSourceType": "vmware",
+  "EndpointUrl": "https://vcenter.company.com",
+  "Username": "service@vsphere.local",
+  "Password": "YOUR_SECURE_PASSWORD_HERE",
+  "ClientAuthenticationKey": "YOUR_CLIENT_AUTH_KEY_HERE",
+  "TenantId": "YOUR_TENANT_ID_HERE",
+  "PageSize": 50,
+  "LOG_LEVEL": "info"
+}

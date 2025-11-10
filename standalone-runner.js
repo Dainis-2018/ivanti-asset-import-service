@@ -110,7 +110,7 @@ if (!IVANTI_URL || !IVANTI_API_KEY) {
 // These should match the IntegrationSourceType values in Ivanti
 const INTEGRATION_SOURCES = options.singleSource 
   ? [options.singleSource]
-  : ['vmware', 'ipfabric', 'snipeit'];
+  : ['vmware', 'ipfabric', 'snipeit', 'mock'];
 
 /**
  * Get all active integrations from Ivanti
@@ -209,7 +209,7 @@ async function main() {
   const startTime = new Date();
   
   logger.logInfo('╔════════════════════════════════════════════════════════════════╗');
-  logger.logInfo('║   Ivanti Asset Import Service - Standalone Execution          ║');
+  logger.logInfo('║   Ivanti Asset Import Service - Standalone Execution           ║');
   logger.logInfo('╚════════════════════════════════════════════════════════════════╝');
   logger.logInfo(`Start Time: ${startTime.toISOString()}`);
   logger.logInfo(`Ivanti URL: ${IVANTI_URL}`);

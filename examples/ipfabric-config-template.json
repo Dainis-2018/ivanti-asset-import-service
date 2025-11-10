@@ -1,0 +1,9 @@
+{
+  "IntegrationSourceType": "ipfabric",
+  "EndpointUrl": "https://ipfabric.company.com",
+  "ApiToken": "YOUR_IPFABRIC_API_TOKEN_HERE",
+  "ClientAuthenticationKey": "YOUR_CLIENT_AUTH_KEY_HERE",
+  "TenantId": "YOUR_TENANT_ID_HERE",
+  "PageSize": 100,
+  "LOG_LEVEL": "info"
+}

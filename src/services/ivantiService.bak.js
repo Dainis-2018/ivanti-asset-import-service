@@ -1,12 +1,10 @@
 const executeWebRequest = require('../utils/webRequestUtils');
 const logger = require('../utils/logger');
 const { compressAndEncode, escapeXmlAttr, escapeXml } = require('../utils/xmlUtils');
-const { decryptConfig } = require('../utils/encryptionUtils');
 
 /**
  * Ivanti Integration Service
  * Handles all interactions with Ivanti ITSM
- * Now supports encrypted configuration fields
  */
 class IvantiService {
   constructor(ivantiUrl, apiKey) {
@@ -19,48 +17,7 @@ class IvantiService {
   }
 
   /**
-   * Decrypt configuration if EncryptedConfig field is present
-   * @param {object} config - Configuration object from Ivanti
-   * @returns {object} - Configuration with decrypted fields
-   */
-  decryptConfigurationIfNeeded(config) {
-    try {
-      // Check if encrypted configuration is present
-      if (config.EncryptedConfig && config.EncryptedConfig.trim().length > 0) {
-        logger.logInfo('Encrypted configuration detected, decrypting...');
-        
-        // Generate nonce from RecId or IntegrationName for consistency
-        const nonce = config.RecId || config.IntegrationName || 'default-nonce';
-        
-        // Decrypt the configuration
-        const decryptedConfig = decryptConfig(
-          config.EncryptedConfig,
-          this.apiKey,
-          nonce
-        );
-        
-        // Merge decrypted fields into the configuration object
-        // Decrypted fields take precedence over existing fields
-        Object.assign(config, decryptedConfig);
-        
-        logger.logInfo('Configuration decrypted successfully');
-        logger.logDebug(`Decrypted fields: ${Object.keys(decryptedConfig).join(', ')}`);
-      } else {
-        logger.logDebug('No encrypted configuration found, using standard fields');
-      }
-      
-      return config;
-    } catch (error) {
-      logger.logError(`Failed to decrypt configuration: ${error.message}`);
-      logger.logWarning('Falling back to unencrypted configuration fields');
-      // Continue with unencrypted fields
-      return config;
-    }
-  }
-
-  /**
    * Get integration configuration from Ivanti
-   * Supports both encrypted and unencrypted configurations
    * @param {string} integrationSourceType - Type of integration source (e.g., 'vmware', 'ipfabric', 'snipeit')
    * @returns {Promise<object>} - Integration configuration object
    */
@@ -73,11 +30,7 @@ class IvantiService {
       const response = await executeWebRequest('GET', endpoint, null, this.headers);
       
       if (response.status === 200 && response.data.value && response.data.value.length > 0) {
-        let config = response.data.value[0];
-        
-        // Decrypt configuration if needed
-        config = this.decryptConfigurationIfNeeded(config);
-        
+        const config = response.data.value[0];
         logger.logInfo(`Integration configuration loaded: ${config.IntegrationName || integrationSourceType}`);
         return config;
       } else {
@@ -102,11 +55,7 @@ class IvantiService {
       const response = await executeWebRequest('GET', endpoint, null, this.headers);
       
       if (response.status === 200 && response.data.value) {
-        let configs = response.data.value;
-        
-        // Decrypt all configurations
-        configs = configs.map(config => this.decryptConfigurationIfNeeded(config));
-        
+        const configs = response.data.value;
         logger.logInfo(`Found ${configs.length} active integration configuration(s)`);
         return configs;
       } else {
@@ -153,7 +102,7 @@ class IvantiService {
    */
   async getFieldMappings(ciTypeRecId) {
     try {
-      const endpoint = `${this.ivantiUrl}api/odata/businessobject/xsc_assetintegration_mappings?$filter=ParentLink_RecID eq '${ciTypeRecId}' and IsActive eq true&$orderby=SortOrder asc`;
+      const endpoint = `${this.ivantiUrl}api/odata/businessobject/xsc_assetintegration_mappings?$filter=ParentLink_RecID eq '${ciTypeRecId}'`;
       
       logger.logDebug(`Fetching field mappings for CI Type: ${ciTypeRecId}`);
       
@@ -174,13 +123,13 @@ class IvantiService {
   }
 
   /**
-   * Post asset data to Ivanti integration queue
-   * @param {string} xmlPayload - Compressed and encoded XML payload
-   * @param {string} clientAuthKey - Client authentication key
-   * @param {string} tenantId - Tenant ID
-   * @returns {Promise<object>} - Response from Ivanti
+   * Post XML to Ivanti Integration Queue
+   * @param {string} xmlPayload - XML payload string
+   * @param {string} clientAuthenticationKey - Client authentication key from integration config
+   * @param {string} tenantId - Tenant ID from integration config
+   * @returns {Promise<object>} - Result of the post operation
    */
-  async postToIntegrationQueue(xmlPayload, clientAuthKey, tenantId) {
+  async postToIntegrationQueue(xmlPayload, clientAuthenticationKey, tenantId) {
     try {
       // Compress and encode the XML
       const encodedXml = await compressAndEncode(xmlPayload);
@@ -190,9 +139,9 @@ class IvantiService {
         Status: 'Queued',
         HandlerName: 'AssetProcessor',
         ManagedByMessageQueue: true,
-        IsPayloadCompressed: false,
+        IsPayloadCompressed: true,
         Payload: JSON.stringify({
-          ClientAuthenticationKey: clientAuthKey,
+          ClientAuthenticationKey: clientAuthenticationKey,
           CompressedMessageBody: encodedXml,
           MessageSubType: 'Full',
           MessageType: 'ASSET',
@@ -206,7 +155,7 @@ class IvantiService {
       const endpoint = `${this.ivantiUrl}api/odata/businessobject/Frs_ops_integration_queues`;
       
       logger.logDebug('Posting to Ivanti integration queue...');
-
+      
       const response = await executeWebRequest('POST', endpoint, queuePayload, this.headers);
       
       if (response.status === 200 || response.status === 201) {
@@ -229,16 +178,16 @@ class IvantiService {
   }
 
   /**
-   * Update integration status
-   * @param {string} configRecId - Configuration record ID
-   * @param {object} statusData - Status update data
+   * Update integration status record
+   * @param {string} integrationRecId - Integration record RecId
+   * @param {object} updates - Fields to update
    * @returns {Promise<boolean>} - Success status
    */
-  async updateIntegrationStatus(configRecId, statusData) {
+  async updateIntegrationStatus(integrationRecId, updates) {
     try {
-      const endpoint = `${this.ivantiUrl}api/odata/businessobject/xsc_assetintegration_configs('${configRecId}')`;
+      const endpoint = `${this.ivantiUrl}api/odata/businessobject/xsc_assetintegration_configs('${integrationRecId}')`;
       
-      const response = await executeWebRequest('PATCH', endpoint, statusData, this.headers);
+      const response = await executeWebRequest('PUT', endpoint, updates, this.headers);
       
       if (response.status === 200 || response.status === 204) {
         logger.logDebug('Integration status updated successfully');
@@ -299,7 +248,7 @@ class IvantiService {
       
       const endpoint = `${this.ivantiUrl}api/odata/businessobject/frs_data_integration_logs('${logRecId}')`;
       
-      const response = await executeWebRequest('PATCH', endpoint, updates, this.headers);
+      const response = await executeWebRequest('PUT', endpoint, updates, this.headers);
       
       if (response.status === 200 || response.status === 204) {
         logger.logDebug('Integration log updated successfully');

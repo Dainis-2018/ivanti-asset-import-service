@@ -206,12 +206,12 @@ curl -X POST http://localhost:3000/api/import \
 
 2. **Check Ivanti Integration Log**:
    - Open Ivanti ITSM
-   - Navigate to `frs_data_integration_logs`
+   - Navigate to `frs_data_integration_log`
    - Find latest record
    - Check status and statistics
 
 3. **Check Integration Queue**:
-   - Navigate to `Frs_ops_integration_queues`
+   - Navigate to `Frs_ops_integration_queue`
    - Verify records are being processed
    - Check for any errors
 
@@ -272,9 +272,9 @@ curl -H "Authorization: Bearer your-token" \
 1. Open Ivanti Configuration Console
 2. Navigate to Business Objects
 3. Check for:
-   - `xsc_assetintegrationconfigs`
-   - `xsc_assetintegration_citypes`
-   - `xsc_assetintegration_mappings`
+   - `xsc_assetintegrationconfig`
+   - `xsc_assetintegration_citype`
+   - `xsc_assetintegration_mapping`
 
 **Verify IntegrationSourceType matches exactly:**
 - Must be lowercase

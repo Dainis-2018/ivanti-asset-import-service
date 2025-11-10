@@ -1,0 +1,9 @@
+{
+  "IntegrationSourceType": "snipeit",
+  "EndpointUrl": "https://assets.company.com",
+  "ApiToken": "YOUR_SNIPEIT_API_TOKEN_HERE",
+  "ClientAuthenticationKey": "YOUR_CLIENT_AUTH_KEY_HERE",
+  "TenantId": "YOUR_TENANT_ID_HERE",
+  "PageSize": 100,
+  "LOG_LEVEL": "info"
+}
