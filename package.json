@@ -1,0 +1,53 @@
+{
+  "name": "ivanti-asset-import-service",
+  "version": "1.0.0",
+  "description": "Generic asset import service for Ivanti ITSM with support for multiple sources (VMware vCenter, IP-Fabric, Snipe-IT, etc.)",
+  "main": "dist/app.js",
+  "scripts": {
+    "start": "node dist/app.js",
+    "start:dev": "node src/app.js",
+    "standalone": "node dist/standalone-runner.js",
+    "standalone:dev": "node standalone-runner.js",
+    "dev": "nodemon src/app.js",
+    "test": "node test-api.js",
+    "lint": "eslint ./src",
+    "lint:fix": "eslint ./src --fix",
+    "clean": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')) fs.rmSync('dist',{recursive:true});\"",
+    "prebuild": "npm run clean",
+    "build": "webpack --config webpack.config.js",
+    "build:watch": "webpack --config webpack.config.js --watch"
+  },
+  "keywords": [
+    "ivanti",
+    "asset-import",
+    "cmdb",
+    "integration"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.7",
+    "body-parser": "^1.20.2",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "winston": "^3.11.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.5",
+    "@babel/preset-env": "^7.23.5",
+    "babel-loader": "^9.1.3",
+    "clean-webpack-plugin": "^4.0.0",
+    "copy-webpack-plugin": "^11.0.0",
+    "eslint": "^8.56.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.29.1",
+    "faker": "^5.5.3",
+    "nodemon": "^3.0.3",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

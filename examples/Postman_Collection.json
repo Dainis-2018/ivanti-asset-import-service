@@ -1,0 +1,344 @@
+{
+  "info": {
+    "name": "Ivanti Asset Import Service",
+    "description": "Complete API collection for testing the Ivanti Asset Import Service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        },
+        "description": "Check if the service is running and healthy"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Supported Sources",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/sources",
+          "host": ["{{base_url}}"],
+          "path": ["api", "sources"]
+        },
+        "description": "Get list of supported integration source types"
+      },
+      "response": []
+    },
+    {
+      "name": "Import Assets (Async) - VMware",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Ivanti-API-Key",
+            "value": "{{ivanti_api_key}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ivantiUrl\": \"{{ivanti_url}}\",\n  \"integrationSourceType\": \"vmware\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/import",
+          "host": ["{{base_url}}"],
+          "path": ["api", "import"]
+        },
+        "description": "Start VMware asset import (returns immediately, processes in background)"
+      },
+      "response": []
+    },
+    {
+      "name": "Import Assets (Async) - IP Fabric",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ivantiUrl\": \"{{ivanti_url}}\",\n  \"ivantiApiKey\": \"{{ivanti_api_key}}\",\n  \"integrationSourceType\": \"ipfabric\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/import",
+          "host": ["{{base_url}}"],
+          "path": ["api", "import"]
+        },
+        "description": "Start IP Fabric asset import (API key in body instead of header)"
+      },
+      "response": []
+    },
+    {
+      "name": "Import Assets (Async) - Snipe-IT",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Ivanti-API-Key",
+            "value": "{{ivanti_api_key}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ivantiUrl\": \"{{ivanti_url}}\",\n  \"integrationSourceType\": \"snipeit\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/import",
+          "host": ["{{base_url}}"],
+          "path": ["api", "import"]
+        },
+        "description": "Start Snipe-IT asset import"
+      },
+      "response": []
+    },
+    {
+      "name": "Import Single Asset - VMware",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Ivanti-API-Key",
+            "value": "{{ivanti_api_key}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ivantiUrl\": \"{{ivanti_url}}\",\n  \"integrationSourceType\": \"vmware\",\n  \"singleAssetId\": \"vm-123\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/import",
+          "host": ["{{base_url}}"],
+          "path": ["api", "import"]
+        },
+        "description": "Import a single asset by ID"
+      },
+      "response": []
+    },
+    {
+      "name": "Import Assets (Sync) - VMware",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ivantiUrl\": \"{{ivanti_url}}\",\n  \"ivantiApiKey\": \"{{ivanti_api_key}}\",\n  \"integrationSourceType\": \"vmware\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/import/sync",
+          "host": ["{{base_url}}"],
+          "path": ["api", "import", "sync"]
+        },
+        "description": "Synchronous import - waits for completion and returns statistics. Useful for testing and debugging."
+      },
+      "response": []
+    },
+    {
+      "name": "Test VMware Connection (Direct)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Basic {{vmware_basic_auth}}"
+          }
+        ],
+        "url": {
+          "raw": "{{vmware_url}}/rest/com/vmware/cis/session",
+          "host": ["{{vmware_url}}"],
+          "path": ["rest", "com", "vmware", "cis", "session"]
+        },
+        "description": "Test VMware vCenter authentication directly"
+      },
+      "response": []
+    },
+    {
+      "name": "Test IP Fabric Connection (Direct)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Token",
+            "value": "{{ipfabric_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"snapshot\": \"$last\"\n}"
+        },
+        "url": {
+          "raw": "{{ipfabric_url}}/api/v1/tables/inventory/devices",
+          "host": ["{{ipfabric_url}}"],
+          "path": ["api", "v1", "tables", "inventory", "devices"]
+        },
+        "description": "Test IP Fabric authentication and data retrieval"
+      },
+      "response": []
+    },
+    {
+      "name": "Test Snipe-IT Connection (Direct)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{snipeit_token}}"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{snipeit_url}}/api/v1/hardware?limit=1",
+          "host": ["{{snipeit_url}}"],
+          "path": ["api", "v1", "hardware"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "description": "Test Snipe-IT authentication and data retrieval"
+      },
+      "response": []
+    },
+    {
+      "name": "Test Ivanti API - Get Integration Config",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "rest_api_key={{ivanti_api_key}}"
+          }
+        ],
+        "url": {
+          "raw": "{{ivanti_url}}api/odata/businessobject/xsc_assetintegrationconfigs",
+          "host": ["{{ivanti_url}}"],
+          "path": ["api", "odata", "businessobject", "xsc_assetintegrationconfigs"]
+        },
+        "description": "Test Ivanti API and retrieve integration configurations"
+      },
+      "response": []
+    },
+    {
+      "name": "Test Ivanti API - Get CI Types",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "rest_api_key={{ivanti_api_key}}"
+          }
+        ],
+        "url": {
+          "raw": "{{ivanti_url}}api/odata/businessobject/xsc_assetintegration_citypes",
+          "host": ["{{ivanti_url}}"],
+          "path": ["api", "odata", "businessobject", "xsc_assetintegration_citypes"]
+        },
+        "description": "Test Ivanti API and retrieve CI Types"
+      },
+      "response": []
+    },
+    {
+      "name": "Test Ivanti API - Get Mappings",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "rest_api_key={{ivanti_api_key}}"
+          }
+        ],
+        "url": {
+          "raw": "{{ivanti_url}}api/odata/businessobject/xsc_assetintegration_mappings",
+          "host": ["{{ivanti_url}}"],
+          "path": ["api", "odata", "businessobject", "xsc_assetintegration_mappings"]
+        },
+        "description": "Test Ivanti API and retrieve field mappings"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "ivanti_url",
+      "value": "https://your-tenant.ivanticloud.com/HEAT/",
+      "type": "string"
+    },
+    {
+      "key": "ivanti_api_key",
+      "value": "your-ivanti-api-key",
+      "type": "string"
+    },
+    {
+      "key": "vmware_url",
+      "value": "https://vcenter.company.com",
+      "type": "string"
+    },
+    {
+      "key": "vmware_basic_auth",
+      "value": "base64-encoded-user:pass",
+      "type": "string"
+    },
+    {
+      "key": "ipfabric_url",
+      "value": "https://ipfabric.company.com",
+      "type": "string"
+    },
+    {
+      "key": "ipfabric_token",
+      "value": "your-ipfabric-token",
+      "type": "string"
+    },
+    {
+      "key": "snipeit_url",
+      "value": "https://assets.company.com",
+      "type": "string"
+    },
+    {
+      "key": "snipeit_token",
+      "value": "your-snipeit-token",
+      "type": "string"
+    }
+  ]
+}
