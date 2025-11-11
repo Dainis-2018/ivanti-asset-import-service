@@ -175,15 +175,15 @@ class IvantiService {
 
   /**
    * Post asset data to Ivanti integration queue
-   * @param {string} xmlPayload - Compressed and encoded XML payload
+   * @param {string} rawXmlPayload - Raw XML payload string
    * @param {string} clientAuthKey - Client authentication key
    * @param {string} tenantId - Tenant ID
    * @returns {Promise<object>} - Response from Ivanti
    */
-  async postToIntegrationQueue(xmlPayload, clientAuthKey, tenantId) {
+  async postToIntegrationQueue(rawXmlPayload, clientAuthKey, tenantId) {
     try {
       // Compress and encode the XML
-      const encodedXml = await compressAndEncode(xmlPayload);
+      const encodedXml = await compressAndEncode(rawXmlPayload);
       
       const queuePayload = {
         IntegrationObjectRecId: "",
@@ -225,31 +225,6 @@ class IvantiService {
         success: false, 
         message: error.message 
       };
-    }
-  }
-
-  /**
-   * Update integration status
-   * @param {string} configRecId - Configuration record ID
-   * @param {object} statusData - Status update data
-   * @returns {Promise<boolean>} - Success status
-   */
-  async updateIntegrationStatus(configRecId, statusData) {
-    try {
-      const endpoint = `${this.ivantiUrl}api/odata/businessobject/xsc_assetintegration_configs('${configRecId}')`;
-      
-      const response = await executeWebRequest('PATCH', endpoint, statusData, this.headers);
-      
-      if (response.status === 200 || response.status === 204) {
-        logger.logDebug('Integration status updated successfully');
-        return true;
-      } else {
-        logger.logWarning(`Failed to update integration status. Status: ${response.status}`);
-        return false;
-      }
-    } catch (error) {
-      logger.logError(`Error updating integration status: ${error.message}`);
-      return false;
     }
   }
 
@@ -381,7 +356,8 @@ class IvantiService {
           }
 
           // Add to appropriate section
-          if (targetProperty && value !== null && typeof value !== 'undefined') {
+          // Exclude properties that are null, undefined, or an empty string
+          if (targetProperty && value !== null && typeof value !== 'undefined' && String(value).trim() !== '') {
             const section = mapping.Section || 'Identity';
             if (!sections[section]) {
               sections[section] = [];

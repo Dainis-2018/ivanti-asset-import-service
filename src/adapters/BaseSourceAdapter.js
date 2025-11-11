@@ -113,9 +113,12 @@ class BaseSourceAdapter {
    * Log adapter information
    */
   logInfo() {
-    logger.logInfo(`Source Adapter: ${this.name}`);
-    logger.logInfo(`Endpoint: ${this.getBaseUrl()}`);
-    logger.logInfo(`Page Size: ${this.getPageSize()}`);
+    logger.logInfo('='.repeat(55));
+    logger.logInfo(`  Source Adapter: ${this.name}`);
+    logger.logInfo('='.repeat(55));
+    logger.logInfo(`  Endpoint: ${this.getBaseUrl()}`);
+    logger.logInfo(`  Page Size: ${this.getPageSize()}`);
+    logger.logInfo('='.repeat(55));
   }
 }
 

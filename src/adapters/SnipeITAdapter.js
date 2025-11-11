@@ -43,7 +43,7 @@ class SnipeITAdapter extends BaseSourceAdapter {
         logger.logInfo('Snipe-IT authentication successful');
         return true;
       } else {
-        logger.logError(`Snipe-IT authentication failed: ${response.status}`);
+        logger.logError(`Snipe-IT authentication failed: ${response.status} - ${JSON.stringify(response.data)}`);
         return false;
       }
     } catch (error) {
@@ -124,7 +124,8 @@ class SnipeITAdapter extends BaseSourceAdapter {
       if (response.status === 200) {
         return response.data;
       } else {
-        throw new Error(`Asset not found: ${assetId}`);
+        logger.logWarning(`Asset not found with ID: ${assetId}`);
+        return null;
       }
     } catch (error) {
       logger.logError(`Error getting asset by ID: ${error.message}`);
@@ -156,7 +157,8 @@ class SnipeITAdapter extends BaseSourceAdapter {
       if (response.status === 200) {
         return response.data;
       } else {
-        throw new Error(`Asset not found with tag: ${assetTag}`);
+        logger.logWarning(`Asset not found with tag: ${assetTag}`);
+        return null;
       }
     } catch (error) {
       logger.logError(`Error getting asset by tag: ${error.message}`);

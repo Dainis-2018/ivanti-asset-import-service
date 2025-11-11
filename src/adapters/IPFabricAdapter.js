@@ -147,7 +147,9 @@ class IPFabricAdapter extends BaseSourceAdapter {
       if (response.status === 200 && response.data.data && response.data.data.length > 0) {
         return response.data.data[0];
       } else {
-        throw new Error(`Device not found: ${assetId}`);
+        // Return null if not found, consistent with other adapters
+        logger.logWarning(`Device not found in IP Fabric with ID or hostname: ${assetId}`);
+        return null;
       }
     } catch (error) {
       logger.logError(`Error getting device by ID: ${error.message}`);

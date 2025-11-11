@@ -94,7 +94,7 @@ class MockAdapter extends BaseSourceAdapter {
       return {
         assets,
         hasMore,
-        total: this.mockData.length
+        totalCount: this.mockData.length
       };
     } catch (error) {
       logger.logError(`Mock Adapter getAssets failed: ${error.message}`);
@@ -107,7 +107,13 @@ class MockAdapter extends BaseSourceAdapter {
    */
   async getAssetById(assetId) {
     try {
-      const asset = this.mockData.find(a => a.id === assetId);
+      // Search by multiple common identifier fields to be more realistic
+      const asset = this.mockData.find(a => 
+        String(a.id) === String(assetId) || 
+        a.asset_tag === assetId ||
+        a.hostname === assetId ||
+        a.sn === assetId
+      );
       
       if (!asset) {
         throw new Error(`Asset not found: ${assetId}`);

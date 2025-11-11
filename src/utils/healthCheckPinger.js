@@ -4,7 +4,7 @@ const logger = require('./logger');
 class HealthCheckPinger {
   constructor() {
     this.intervalId = null;
-    this.baseUrl = null;
+    this.baseUrl = null; // Will be set during start()
     this.pingInterval = 5 * 60 * 1000; // 5 minutes
     this.isRunning = false;
     this.pingCount = 0;
@@ -15,19 +15,24 @@ class HealthCheckPinger {
    * @param {string} baseUrl - Base URL of the service
    */
   start(baseUrl) {
-    // Check if health check is disabled
-    const enableHealthCheck = process.env.ENABLE_HEALTH_CHECK_PINGER !== 'false';
-    
-    if (!enableHealthCheck) {
-      logger.logInfo('Health check pinger is disabled (ENABLE_HEALTH_CHECK_PINGER=false)');
+    // Check if health check is explicitly disabled via environment variable
+    if (process.env.ENABLE_HEALTH_CHECK_PINGER === 'false') {
+      logger.logInfo('Health check pinger is disabled by configuration.');
       return;
     }
 
     if (this.isRunning) {
-      logger.logWarning('Health check pinger is already running');
+      logger.logWarning('Health check pinger is already running.');
       return;
     }
 
+    // Make ping interval configurable via environment variable
+    const configuredIntervalMinutes = parseInt(process.env.HEALTH_CHECK_PING_INTERVAL_MINUTES, 10);
+    if (!isNaN(configuredIntervalMinutes) && configuredIntervalMinutes > 0) {
+      this.pingInterval = configuredIntervalMinutes * 60 * 1000;
+    }
+
+    // Initialize state
     this.baseUrl = baseUrl;
     this.isRunning = true;
     this.pingCount = 0;
@@ -35,7 +40,10 @@ class HealthCheckPinger {
     logger.logInfo(`Health check pinger started - will ping ${baseUrl}/health every 5 minutes`);
 
     // Initial ping after 30 seconds
-    setTimeout(() => this.ping(), 30000);
+    setTimeout(() => {
+      logger.logInfo('Performing initial health check ping...');
+      this.ping();
+    }, 30000);
 
     // Set up periodic pinging
     this.intervalId = setInterval(() => {
@@ -72,7 +80,7 @@ class HealthCheckPinger {
       });
 
       if (response.status === 200) {
-        logger.logInfo(`Health check ping #${this.pingCount}: OK`);
+        logger.logInfo(`Health check ping #${this.pingCount}: OK`); // Changed to debug for less verbose info logs
       } else {
         logger.logWarning(`Health check ping #${this.pingCount} returned status: ${response.status}`);
       }

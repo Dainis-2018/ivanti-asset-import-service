@@ -6,6 +6,22 @@ const IPFabricAdapter = require('./IPFabricAdapter');
 const SnipeITAdapter = require('./SnipeITAdapter');
 const MockAdapter = require('./MockAdapter');
 
+// Central registry for all adapters and their aliases
+const ADAPTER_REGISTRY = {
+  'vmware': VMwareAdapter,
+  'vcenter': VMwareAdapter,
+  'vmware-vcenter': VMwareAdapter,
+  'ipfabric': IPFabricAdapter,
+  'ip-fabric': IPFabricAdapter,
+  'ipf': IPFabricAdapter,
+  'snipeit': SnipeITAdapter,
+  'snipe-it': SnipeITAdapter,
+  'snipe': SnipeITAdapter,
+  'mock': MockAdapter,
+  'test': MockAdapter,
+  'synthetic': MockAdapter,
+};
+
 /**
  * Adapter Factory
  * Creates appropriate source adapter based on integration type
@@ -22,30 +38,13 @@ class AdapterFactory {
 
     logger.logInfo(`Creating adapter for source type: ${sourceType}`);
 
-    switch (sourceTypeLower) {
-      case 'vmware':
-      case 'vcenter':
-      case 'vmware-vcenter':
-        return new VMwareAdapter(config);
-
-      case 'ipfabric':
-      case 'ip-fabric':
-      case 'ipf':
-        return new IPFabricAdapter(config);
-
-      case 'snipeit':
-      case 'snipe-it':
-      case 'snipe':
-        return new SnipeITAdapter(config);
-
-      case 'mock':
-      case 'test':
-      case 'synthetic':
-        return new MockAdapter(config);
-
-      default:
-        throw new Error(`Unsupported source type: ${sourceType}. Supported types: vmware, ipfabric, snipeit, mock.`);
+    const AdapterClass = ADAPTER_REGISTRY[sourceTypeLower];
+    
+    if (AdapterClass) {
+      return new AdapterClass(config);
     }
+    
+    throw new Error(`Unsupported source type: ${sourceType}. Supported types: ${Object.keys(ADAPTER_REGISTRY).join(', ')}`);
   }
 
   /**
@@ -53,17 +52,7 @@ class AdapterFactory {
    * @returns {Array<string>} - List of supported source types
    */
   static getSupportedTypes() {
-    return [
-      'vmware',
-      'vcenter',
-      'ipfabric',
-      'ip-fabric',
-      'snipeit',
-      'snipe-it',
-      'mock',
-      'test',
-      'synthetic'
-    ];
+    return Object.keys(ADAPTER_REGISTRY);
   }
 
   /**

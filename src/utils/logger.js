@@ -40,23 +40,29 @@ const logger = winston.createLogger({
 
 // Log message buffer for Ivanti logging
 let logMessageBuffer = [];
+let bufferTruncated = false;
 const MAX_BUFFER_SIZE = 1000;
 
 /**
  * Add message to buffer for Ivanti logging
  */
 const addToBuffer = (message) => {
-  logMessageBuffer.push(message);
-  if (logMessageBuffer.length > MAX_BUFFER_SIZE) {
+  if (logMessageBuffer.length >= MAX_BUFFER_SIZE) {
     logMessageBuffer.shift(); // Remove oldest message
+    bufferTruncated = true;
   }
+  logMessageBuffer.push(message);
 };
 
 /**
  * Get all buffered messages
  */
 const getBufferedMessages = () => {
-  return logMessageBuffer.join('\n');
+  const messages = [...logMessageBuffer];
+  if (bufferTruncated) {
+    messages.unshift('[...log truncated due to size limit...]\n');
+  }
+  return messages.join('\n');
 };
 
 /**
@@ -64,6 +70,7 @@ const getBufferedMessages = () => {
  */
 const clearBuffer = () => {
   logMessageBuffer = [];
+  bufferTruncated = false;
 };
 
 /**

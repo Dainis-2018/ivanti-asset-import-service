@@ -49,6 +49,7 @@ if (!configLoaded) {
 const logger = require('./src/utils/logger');
 const IvantiService = require('./src/services/ivantiService');
 const AssetImportService = require('./src/services/assetImportService');
+const AdapterFactory = require('./src/adapters/AdapterFactory');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -106,17 +107,13 @@ if (!IVANTI_URL || !IVANTI_API_KEY) {
   process.exit(1);
 }
 
-// Supported integration sources
-// These should match the IntegrationSourceType values in Ivanti
-const INTEGRATION_SOURCES = options.singleSource 
-  ? [options.singleSource]
-  : ['vmware', 'ipfabric', 'snipeit', 'mock'];
-
 /**
  * Get all active integrations from Ivanti
  */
 async function getActiveIntegrations() {
   const ivantiService = new IvantiService(IVANTI_URL, IVANTI_API_KEY);
+  // Dynamically get supported sources from the factory
+  const supportedSources = options.singleSource ? [options.singleSource] : AdapterFactory.getSupportedTypes();
   
   try {
     const integrations = await ivantiService.getIntegrationConfigurations();
@@ -124,7 +121,7 @@ async function getActiveIntegrations() {
     // Filter for active integrations that match our supported sources
     const activeIntegrations = integrations.filter(config => 
       config.IsActive && 
-      INTEGRATION_SOURCES.includes(config.IntegrationSourceType?.toLowerCase())
+      supportedSources.includes(config.IntegrationSourceType?.toLowerCase())
     );
     
     return activeIntegrations;
@@ -232,7 +229,7 @@ async function main() {
       logger.logWarning('Please configure integrations in Ivanti ITSM:');
       logger.logWarning('  Business Object: xsc_assetintegration_configs');
       logger.logWarning('  Set IsActive = true');
-      logger.logWarning(`  IntegrationSourceType: ${INTEGRATION_SOURCES.join(', ')}`);
+      logger.logWarning(`  Supported IntegrationSourceType values: ${AdapterFactory.getSupportedTypes().join(', ')}`);
       process.exit(0);
     }
 
@@ -251,10 +248,11 @@ async function main() {
       
       // Wait between integrations to avoid overloading systems
       const isLast = activeIntegrations.indexOf(integration) === activeIntegrations.length - 1;
+      const delaySeconds = parseInt(process.env.STANDALONE_INTEGRATION_DELAY, 10) || 30;
       if (!isLast) {
-        logger.logInfo('Waiting 30 seconds before next integration...');
+        logger.logInfo(`Waiting ${delaySeconds} seconds before next integration...`);
         logger.logInfo('');
-        await new Promise(resolve => setTimeout(resolve, 30000));
+        await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
       }
     }
 

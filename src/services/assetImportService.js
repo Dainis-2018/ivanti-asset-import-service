@@ -78,9 +78,11 @@ class AssetImportService {
   /**
    * Import all assets from source to Ivanti
    * @param {object} integrationConfig - Integration configuration from Ivanti
+   * @param {object} options - Additional options like { dryRun: boolean }
    * @returns {Promise<object>} - Import statistics
    */
-  async importAssets(integrationConfig) {
+  async importAssets(integrationConfig, options = {}) {
+    let logRecId = null;
     try {
       // Store integration config for use in other methods
       this.integrationConfig = integrationConfig;
@@ -102,7 +104,7 @@ class AssetImportService {
       }
 
       // Create integration log
-      const logRecId = await this.ivantiService.createIntegrationLog(
+      logRecId = await this.ivantiService.createIntegrationLog(
         integrationConfig.IntegrationName || integrationConfig.IntegrationSourceType,
         integrationConfig.IntegrationSourceType
       );
@@ -118,7 +120,7 @@ class AssetImportService {
 
       // Process each CI Type
       for (const ciType of ciTypes) {
-        await this.processCIType(ciType);
+        await this.processCIType(ciType, options);
       }
 
       // Finalize
@@ -137,6 +139,8 @@ class AssetImportService {
     } catch (error) {
       logger.logError(`Asset import failed: ${error.message}`);
       this.importStats.endTime = new Date();
+      // Ensure the log is updated to a failed state
+      await this.finalizeLog(logRecId, 'Failed');
       throw error;
     }
   }
@@ -144,9 +148,10 @@ class AssetImportService {
   /**
    * Process a single CI Type
    * @param {object} ciType - CI Type configuration
+   * @param {object} options - Additional options like { dryRun: boolean }
    * @returns {Promise<void>}
    */
-  async processCIType(ciType) {
+  async processCIType(ciType, options = {}) {
     try {
       logger.logInfo(`Processing CI Type: ${ciType.CIType} (${ciType.CITypeName || 'N/A'})`);
 
@@ -185,7 +190,7 @@ class AssetImportService {
           
           // When batch is full, process it
           if (assetBatch.length >= batchSize) {
-            await this.processAssetBatch(assetBatch, fieldMappings, ciType.CIType);
+            await this.processAssetBatch(assetBatch, fieldMappings, ciType.CIType, options);
             assetBatch = []; // Clear batch
           }
         }
@@ -202,7 +207,7 @@ class AssetImportService {
 
       // Process any remaining assets in batch
       if (assetBatch.length > 0) {
-        await this.processAssetBatch(assetBatch, fieldMappings, ciType.CIType);
+        await this.processAssetBatch(assetBatch, fieldMappings, ciType.CIType, options);
       }
 
       logger.logInfo(`Completed processing CI Type: ${ciType.CIType}`);
@@ -217,14 +222,23 @@ class AssetImportService {
    * @param {Array} assets - Array of asset data from source
    * @param {Array} fieldMappings - Field mappings
    * @param {string} ciType - CI Type value
+   * @param {object} options - Additional options like { dryRun: boolean }
    * @returns {Promise<void>}
    */
-  async processAssetBatch(assets, fieldMappings, ciType) {
+  async processAssetBatch(assets, fieldMappings, ciType, options = {}) {
     try {
       logger.logInfo(`Processing batch of ${assets.length} asset(s)...`);
 
       // Build XML payload for all assets in batch
       const xmlPayload = this.ivantiService.buildAssetXml(assets, fieldMappings, ciType);
+
+      // If dry run, log the payload and skip posting
+      if (options.dryRun) {
+        logger.logInfo(`[DRY RUN] Skipping post to Ivanti queue.`);
+        logger.logDebug(`[DRY RUN] XML Payload would be:\n${xmlPayload}`);
+        this.importStats.totalProcessed += assets.length; // Still count as "processed" for stats
+        return;
+      }
 
       // Post to Ivanti queue with ClientAuthenticationKey and TenantId
       const result = await this.ivantiService.postToIntegrationQueue(
@@ -251,33 +265,14 @@ class AssetImportService {
    * @param {object} asset - Asset data from source
    * @param {Array} fieldMappings - Field mappings
    * @param {string} ciType - CI Type value
+   * @param {object} options - Additional options like { dryRun: boolean }
    * @returns {Promise<void>}
    */
-  async processAsset(asset, fieldMappings, ciType) {
-    try {
-      // Build XML payload
-      const xmlPayload = this.ivantiService.buildAssetXml(asset, fieldMappings, ciType);
-
-      // Post to Ivanti queue with ClientAuthenticationKey and TenantId
-      const result = await this.ivantiService.postToIntegrationQueue(
-        xmlPayload,
-        this.integrationConfig.ClientAuthenticationKey,
-        this.integrationConfig.TenantId
-      );
-
-      if (result.success) {
-        this.importStats.totalProcessed++;
-        logger.logDebug(`Asset processed successfully: ${asset.id || asset.name || 'N/A'}`);
-      } else {
-        this.importStats.totalFailed++;
-        logger.logError(`Failed to process asset: ${asset.id || asset.name || 'N/A'} - ${result.message}`);
-      }
-    } catch (error) {
-      this.importStats.totalFailed++;
-      logger.logError(`Error processing asset: ${error.message}`);
-    }
+  async processAsset(asset, fieldMappings, ciType, options = {}) {
+    // Consolidate logic by using the batch processor for a single asset
+    await this.processAssetBatch([asset], fieldMappings, ciType, options);
   }
-
+  
   /**
    * Import a single asset by ID
    * @param {string} assetId - Asset ID in source system

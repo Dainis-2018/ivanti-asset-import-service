@@ -46,6 +46,10 @@ const executeWebRequest = async (method, url, data = null, headers = {}, timeout
     }
 
     logger.logDebug(`Executing ${method} request to: ${url}`);
+    // For debugging, log the payload of POST/PUT requests
+    if (config.data) {
+      logger.logDebug(`Request Payload: ${JSON.stringify(config.data)}`);
+    }
 
     const response = await axios(config);
 

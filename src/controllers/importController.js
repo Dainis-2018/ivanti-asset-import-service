@@ -19,12 +19,11 @@ class ImportController {
         ivantiUrl,
         ivantiApiKey,
         integrationSourceType,
-        singleAssetId
+        singleAssetId,
+        dryRun = false
       } = req.body;
 
-      // Also check headers for API key (alternative method)
-      const apiKeyFromHeader = req.headers['x-ivanti-api-key'];
-      const effectiveApiKey = ivantiApiKey || apiKeyFromHeader;
+      const effectiveApiKey = this._getApiKey(req);
 
       // Validate required parameters
       if (!ivantiUrl) {
@@ -54,6 +53,9 @@ class ImportController {
       logger.logInfo(`  Ivanti URL: ${ivantiUrl}`);
       logger.logInfo(`  Source Type: ${integrationSourceType}`);
       logger.logInfo(`  Single Asset: ${singleAssetId || 'No (full import)'}`);
+      if (dryRun) {
+        logger.logInfo('  Mode: DRY RUN');
+      }
       logger.logInfo('═══════════════════════════════════════════════════════');
 
       // Return immediate response to Ivanti
@@ -66,7 +68,7 @@ class ImportController {
       });
 
       // Execute import asynchronously
-      this.executeImport(ivantiUrl, effectiveApiKey, integrationSourceType, singleAssetId)
+      this.executeImport(ivantiUrl, effectiveApiKey, integrationSourceType, singleAssetId, { dryRun })
         .catch(error => {
           logger.logError(`Async import execution failed: ${error.message}`);
         });
@@ -88,7 +90,7 @@ class ImportController {
   /**
    * Execute the import process asynchronously
    */
-  static async executeImport(ivantiUrl, ivantiApiKey, integrationSourceType, singleAssetId) {
+  static async executeImport(ivantiUrl, ivantiApiKey, integrationSourceType, singleAssetId, options = {}) {
     const importService = new AssetImportService();
     
     try {
@@ -105,7 +107,7 @@ class ImportController {
         await importService.importSingleAsset(singleAssetId, integrationConfig);
       } else {
         // Full import
-        await importService.importAssets(integrationConfig);
+        await importService.importAssets(integrationConfig, options);
       }
 
       logger.logInfo('Import execution completed successfully');
@@ -127,11 +129,11 @@ class ImportController {
         ivantiUrl,
         ivantiApiKey,
         integrationSourceType,
-        singleAssetId
+        singleAssetId,
+        dryRun = false
       } = req.body;
 
-      const apiKeyFromHeader = req.headers['x-ivanti-api-key'];
-      const effectiveApiKey = ivantiApiKey || apiKeyFromHeader;
+      const effectiveApiKey = this._getApiKey(req);
 
       // Validate
       if (!ivantiUrl || !effectiveApiKey || !integrationSourceType) {
@@ -153,7 +155,7 @@ class ImportController {
       if (singleAssetId) {
         result = await importService.importSingleAsset(singleAssetId, integrationConfig);
       } else {
-        result = await importService.importAssets(integrationConfig);
+        result = await importService.importAssets(integrationConfig, { dryRun });
       }
 
       const endTime = new Date();
@@ -212,6 +214,15 @@ class ImportController {
       timestamp: new Date().toISOString(),
       uptime: process.uptime()
     });
+  }
+
+  /**
+   * Get API key from body or header
+   * @private
+   */
+  static _getApiKey(req) {
+    const apiKeyFromHeader = req.headers['x-ivanti-api-key'];
+    return req.body.ivantiApiKey || apiKeyFromHeader;
   }
 }
 

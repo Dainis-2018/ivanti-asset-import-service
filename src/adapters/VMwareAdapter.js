@@ -139,7 +139,10 @@ class VMwareAdapter extends BaseSourceAdapter {
       const endpoint = `${baseUrl}/rest/vcenter/vm/${assetId}`;
       const response = await executeWebRequest('GET', endpoint, null, headers);
 
-      if (response.status === 200) {
+      if (response.status === 404) {
+        logger.logWarning(`VM not found with ID: ${assetId}`);
+        return null;
+      } else if (response.status === 200) {
         const vmData = response.data.value || response.data;
         return {
           id: assetId,

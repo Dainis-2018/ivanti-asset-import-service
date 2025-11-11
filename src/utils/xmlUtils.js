@@ -63,7 +63,7 @@ const decodeAndDecompress = async (encodedString) => {
  * @param {string} unsafe - String to escape
  * @returns {string} - Escaped string
  */
-const escapeXml = (unsafe) => {
+const escapeXmlString = (unsafe) => {
   if (unsafe === null || unsafe === undefined) {
     return '';
   }
@@ -75,31 +75,9 @@ const escapeXml = (unsafe) => {
     .replace(/'/g, '&apos;');
 };
 
-/**
- * Escape XML attribute values
- * @param {string} unsafe - String to escape
- * @returns {string} - Escaped string
- */
-const escapeXmlAttr = (unsafe) => {
-  if (unsafe === null || unsafe === undefined) {
-    return '';
-  }
-  return String(unsafe)
-    .replace(/[<>&"']/g, (c) => {
-      switch (c) {
-        case '<': return '&lt;';
-        case '>': return '&gt;';
-        case '&': return '&amp;';
-        case '"': return '&quot;';
-        case "'": return '&apos;';
-        default: return c;
-      }
-    });
-};
-
 module.exports = {
   compressAndEncode,
   decodeAndDecompress,
-  escapeXml,
-  escapeXmlAttr
+  escapeXml: escapeXmlString,
+  escapeXmlAttr: escapeXmlString
 };
