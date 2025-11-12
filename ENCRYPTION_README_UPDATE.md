@@ -161,6 +161,42 @@ IsActive: true
 
 ### Command-Line Tool Usage
 
+
+The `config-encryptor.js` utility provides a command-line interface for encryption and decryption.
+
+### API-Based Encryption & Decryption (NEW)
+
+As an alternative to the command-line tool, you can use API endpoints to encrypt and decrypt configurations. This is useful for building integrations directly into the Ivanti UI.
+
+#### Encrypt via API
+
+**Endpoint**: `POST /api/encrypt-config`  
+**Description**: Encrypts a JSON configuration object.
+
+**Request Body**:
+```json
+{
+  "ivantiApiKey": "your-ivanti-api-key",
+  "nonce": "your-unique-nonce",
+  "configData": {
+    "EndpointUrl": "https://vcenter.company.com",
+    "Username": "service@vsphere.local",
+    "Password": "SecurePassword123!"
+  }
+}
+```
+
+**Success Response**:
+```json
+{
+  "success": true,
+  "message": "Encryption successful",
+  "encryptedConfig": "Qf2h3k8L...encrypted-data...9Xa2pM==",
+  "nonce": "your-unique-nonce"
+}
+```
+
+
 The `config-encryptor.js` utility provides four modes:
 
 #### Test Mode

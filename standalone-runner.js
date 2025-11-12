@@ -90,7 +90,7 @@ Optional Environment Variables:
   LOG_LEVEL         - Log level (debug, info, warn, error) [default: info]
   LOG_PATH          - Path to log directory [default: ./logs]
     `);
-    process.exit(0);
+    logger.closeAndExit(0);
   }
 }
 
@@ -104,7 +104,7 @@ if (!IVANTI_URL || !IVANTI_API_KEY) {
   logger.logError('Required variables:');
   logger.logError('  IVANTI_URL=https://your-tenant.ivanticloud.com/HEAT/');
   logger.logError('  IVANTI_API_KEY=your_api_key_here');
-  process.exit(1);
+  logger.closeAndExit(1);
 }
 
 /**
@@ -151,13 +151,15 @@ async function runImport(integrationConfig) {
   const startTime = Date.now();
   
   try {
-    // Initialize the import service
+    // Initialize the import service, passing in the pre-fetched configuration.
+    // This avoids a second API call and sets the log level immediately.
     await importService.initialize(
       IVANTI_URL,
       IVANTI_API_KEY,
-      sourceType
+      sourceType,
+      integrationConfig // Pass the full config object
     );
-
+    
     // Execute the import
     const result = await importService.importAssets(integrationConfig, {
       dryRun: options.dryRun
@@ -196,6 +198,10 @@ async function runImport(integrationConfig) {
       duration,
       error: error.message
     };
+  } finally {
+    // Always reset the log level to the global default after each run
+    // This ensures the next integration starts with a clean logging state
+    logger.resetLogLevel();
   }
 }
 
@@ -230,7 +236,7 @@ async function main() {
       logger.logWarning('  Business Object: xsc_assetintegration_configs');
       logger.logWarning('  Set IsActive = true');
       logger.logWarning(`  Supported IntegrationSourceType values: ${AdapterFactory.getSupportedTypes().join(', ')}`);
-      process.exit(0);
+      logger.closeAndExit(0);
     }
 
     logger.logInfo(`Found ${activeIntegrations.length} active integration(s)`);
@@ -299,10 +305,10 @@ async function main() {
     // Exit with appropriate code
     if (failed > 0) {
       logger.logWarning(`Execution completed with ${failed} failure(s)`);
-      process.exit(1);
+      logger.closeAndExit(1);
     } else {
       logger.logInfo('Execution completed successfully');
-      process.exit(0);
+      logger.closeAndExit(0);
     }
 
   } catch (error) {
@@ -314,19 +320,19 @@ async function main() {
     logger.logError('Stack trace:');
     logger.logError(error.stack);
     
-    process.exit(1);
+    logger.closeAndExit(1);
   }
 }
 
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {
   logger.logError('Uncaught Exception:', error);
-  process.exit(1);
+  logger.closeAndExit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   logger.logError('Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
+  logger.closeAndExit(1);
 });
 
 // Run main function

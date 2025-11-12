@@ -1,5 +1,7 @@
 const logger = require('../utils/logger');
 const AssetImportService = require('../services/assetImportService');
+const healthCheckPinger = require('../utils/healthCheckPinger');
+const { encryptConfig, decryptConfig } = require('../utils/encryptionUtils');
 
 /**
  * Import Controller
@@ -23,7 +25,7 @@ class ImportController {
         dryRun = false
       } = req.body;
 
-      const effectiveApiKey = this._getApiKey(req);
+      const effectiveApiKey = ImportController._getApiKey(req);
 
       // Validate required parameters
       if (!ivantiUrl) {
@@ -67,12 +69,12 @@ class ImportController {
         singleAsset: !!singleAssetId
       });
 
-      // Execute import asynchronously
-      this.executeImport(ivantiUrl, effectiveApiKey, integrationSourceType, singleAssetId, { dryRun })
-        .catch(error => {
-          logger.logError(`Async import execution failed: ${error.message}`);
-        });
-
+      // Execute the import asynchronously. It's crucial to add a catch block here
+      // to prevent unhandled promise rejections from background tasks from affecting
+      // the main Express error handling flow.
+      ImportController.executeImport(ivantiUrl, effectiveApiKey, integrationSourceType, singleAssetId, { dryRun }).catch(error => {
+        logger.logError(`Background import execution failed: ${error.message}`, error.stack);
+      });
     } catch (error) {
       logger.logError(`Import request handling error: ${error.message}`);
       
@@ -94,6 +96,9 @@ class ImportController {
     const importService = new AssetImportService();
     
     try {
+      // Signal the start of a long-running process to activate the health check pinger
+      healthCheckPinger.startProcess();
+
       // Initialize the service
       const integrationConfig = await importService.initialize(
         ivantiUrl,
@@ -113,6 +118,10 @@ class ImportController {
       logger.logInfo('Import execution completed successfully');
     } catch (error) {
       logger.logError(`Import execution failed: ${error.message}`, error.stack);
+    } finally {
+      // Always signal the end of the process to allow the pinger to stop
+      // This is crucial for async operations
+      healthCheckPinger.endProcess();
     }
   }
 
@@ -133,7 +142,7 @@ class ImportController {
         dryRun = false
       } = req.body;
 
-      const effectiveApiKey = this._getApiKey(req);
+      const effectiveApiKey = ImportController._getApiKey(req);
 
       // Validate
       if (!ivantiUrl || !effectiveApiKey || !integrationSourceType) {
@@ -214,6 +223,54 @@ class ImportController {
       timestamp: new Date().toISOString(),
       uptime: process.uptime()
     });
+  }
+
+  /**
+   * Encrypt a configuration object via API request.
+   * This is useful for generating encrypted strings from Ivanti or other tools.
+   */
+  static async encryptConfiguration(req, res) {
+    try {
+      const { configData, nonce } = req.body;
+      const effectiveApiKey = ImportController._getApiKey(req);
+
+      // Validate required parameters
+      if (!configData || typeof configData !== 'object') {
+        return res.status(400).json({ success: false, error: 'Missing or invalid required parameter: configData (must be a JSON object)' });
+      }
+      if (!effectiveApiKey) {
+        return res.status(400).json({ success: false, error: 'Missing required parameter: ivantiApiKey (in body or X-Ivanti-API-Key header)' });
+      }
+      if (!nonce) {
+        return res.status(400).json({ success: false, error: 'Missing required parameter: nonce' });
+      }
+
+      logger.logInfo('Encrypt configuration request received...');
+
+      // Encrypt the configuration using the utility function
+      const encryptedConfig = encryptConfig(
+        configData,
+        effectiveApiKey,
+        nonce
+      );
+
+      logger.logInfo('Configuration encrypted successfully via API.');
+
+      res.status(200).json({
+        success: true,
+        message: 'Encryption successful',
+        encryptedConfig,
+        nonce
+      });
+
+    } catch (error) {
+      logger.logError(`Configuration encryption failed: ${error.message}`);
+      res.status(500).json({
+        success: false,
+        error: 'Encryption failed.',
+        message: error.message
+      });
+    }
   }
 
   /**

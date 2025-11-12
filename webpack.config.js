@@ -37,16 +37,6 @@ module.exports = {
     ]
   },
   
-  externals: {
-    // External dependencies - installed via npm
-    'express': 'commonjs express',
-    'axios': 'commonjs axios',
-    'winston': 'commonjs winston',
-    'winston-daily-rotate-file': 'commonjs winston-daily-rotate-file',
-    'body-parser': 'commonjs body-parser',
-    'dotenv': 'commonjs dotenv'
-  },
-  
   plugins: [
     new CleanWebpackPlugin(),
     
@@ -63,7 +53,6 @@ module.exports = {
         { from: 'README.md', to: 'README.md' },
         { from: 'QUICKSTART.md', to: 'QUICKSTART.md' },
         { from: 'INTEGRATION_GUIDE.md', to: 'INTEGRATION_GUIDE.md' },
-        { from: 'CHANGELOG.md', to: 'CHANGELOG.md' },
         { from: 'LICENSE', to: 'LICENSE' },
         
         // Configuration
@@ -71,8 +60,7 @@ module.exports = {
         { from: 'web.config', to: 'web.config' },
         
         // Examples and setup
-        { from: 'examples/', to: 'examples/' },
-        { from: 'ivanti-setup/', to: 'ivanti-setup/' },
+        
         
         // Views
         { from: 'src/views/', to: 'views/' }

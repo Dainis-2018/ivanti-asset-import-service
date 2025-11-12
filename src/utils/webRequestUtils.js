@@ -2,6 +2,9 @@ const axios = require('axios');
 const https = require('https');
 const logger = require('./logger');
 
+// Flag to ensure SSL warning is logged only once
+let sslWarningLogged = false;
+
 /**
  * Execute a web request with error handling
  * @param {string} method - HTTP method (GET, POST, PUT, DELETE)
@@ -9,7 +12,7 @@ const logger = require('./logger');
  * @param {object} data - Request body data
  * @param {object} headers - Request headers
  * @param {number} timeout - Request timeout in milliseconds (default: 60000)
- * @param {object} options - Additional options (rejectUnauthorized, etc.)
+ * @param {object} options - Additional options (rejectUnauthorized, logPayload)
  * @returns {Promise<object>} - Response object with status, data, and headers
  */
 const executeWebRequest = async (method, url, data = null, headers = {}, timeout = 60000, options = {}) => {
@@ -27,11 +30,16 @@ const executeWebRequest = async (method, url, data = null, headers = {}, timeout
 
     // SSL/TLS certificate handling
     // Check environment variable or options
-    const rejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0' && 
+    const envVar = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    const isDisabledByEnv = envVar === '0' || envVar?.toLowerCase() === 'false';
+    const rejectUnauthorized = !isDisabledByEnv &&
                                options.rejectUnauthorized !== false;
-    
+
     if (!rejectUnauthorized) {
-      logger.logWarning('SSL certificate validation is DISABLED - using self-signed certificates');
+      if (!sslWarningLogged) {
+        logger.logInfo('SSL certificate validation is disabled by configuration (NODE_TLS_REJECT_UNAUTHORIZED).');
+        sslWarningLogged = true;
+      }
       config.httpsAgent = new https.Agent({
         rejectUnauthorized: false
       });
@@ -45,9 +53,11 @@ const executeWebRequest = async (method, url, data = null, headers = {}, timeout
       config.params = data;
     }
 
+    const { logPayload = true } = options;
+
     logger.logDebug(`Executing ${method} request to: ${url}`);
     // For debugging, log the payload of POST/PUT requests
-    if (config.data) {
+    if (config.data && logPayload) {
       logger.logDebug(`Request Payload: ${JSON.stringify(config.data)}`);
     }
 

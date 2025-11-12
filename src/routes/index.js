@@ -13,6 +13,9 @@ router.post('/import', ImportController.importAssets);
 // Synchronous import endpoint (waits for completion)
 router.post('/import/sync', ImportController.importAssetsSync);
 
+// Encrypt configuration (for testing/generation)
+router.post('/encrypt-config', ImportController.encryptConfiguration);
+
 // Get supported source types
 router.get('/sources', ImportController.getSupportedSources);
 

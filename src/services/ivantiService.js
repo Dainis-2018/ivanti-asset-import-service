@@ -53,6 +53,10 @@ class IvantiService {
     } catch (error) {
       logger.logError(`Failed to decrypt configuration: ${error.message}`);
       logger.logWarning('Falling back to unencrypted configuration fields');
+      
+      // Prevent loop on retry by removing the invalid encrypted field
+      delete config.EncryptedConfig;
+
       // Continue with unencrypted fields
       return config;
     }
@@ -190,7 +194,7 @@ class IvantiService {
         Status: 'Queued',
         HandlerName: 'AssetProcessor',
         ManagedByMessageQueue: true,
-        IsPayloadCompressed: false,
+        IsPayloadCompressed: true,
         Payload: JSON.stringify({
           ClientAuthenticationKey: clientAuthKey,
           CompressedMessageBody: encodedXml,
@@ -229,55 +233,135 @@ class IvantiService {
   }
 
   /**
-   * Create integration log entry
-   * @param {string} integrationName - Name of the integration
+   * Find or create integration record in frs_def_integrations
+   * @param {string} sourceType - Source type (e.g., 'vmware', 'ipfabric')
+   * @param {string} integrationName - Integration name
+   * @returns {Promise<object>} - Integration record with RecId
+   */
+  async findOrCreateIntegration(sourceType, integrationName) {
+    try {
+      // Construct the integration name: SourceType-IntegrationName
+      const fullIntegrationName = `${sourceType}-${integrationName}`;
+      
+      // Try to find existing integration
+      logger.logDebug(`Searching for existing integration with Name: ${fullIntegrationName}`);
+      const searchEndpoint = `${this.ivantiUrl}api/odata/businessobject/frs_def_integrations?$filter=Name eq '${fullIntegrationName}'&$top=1`;
+      
+      const searchResponse = await executeWebRequest('GET', searchEndpoint, null, this.headers);
+      
+      // If integration exists, return it
+      if (searchResponse.status === 200 && searchResponse.data.value && searchResponse.data.value.length > 0) {
+        const existingIntegration = searchResponse.data.value[0];
+        logger.logInfo(`Found existing integration: ${fullIntegrationName} (RecId: ${existingIntegration.RecId})`);
+        return existingIntegration;
+      }
+      
+      // Integration doesn't exist, create new one
+      logger.logInfo(`Integration not found. Creating new integration: ${fullIntegrationName}`);
+      
+      const createEndpoint = `${this.ivantiUrl}api/odata/businessobject/frs_def_integrations`;
+      const integrationPayload = {
+        Name: fullIntegrationName,
+        ReadOnly: false
+      };
+      
+      const createResponse = await executeWebRequest('POST', createEndpoint, integrationPayload, this.headers);
+      
+      if (createResponse.status === 200 || createResponse.status === 201) {
+        const newIntegration = createResponse.data;
+        logger.logInfo(`Successfully created integration: ${fullIntegrationName} (RecId: ${newIntegration.RecId})`);
+        return newIntegration;
+      } else {
+        throw new Error(`Failed to create integration. Status: ${createResponse.status}`);
+      }
+    } catch (error) {
+      logger.logError(`Error in findOrCreateIntegration: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Create integration log entry in frs_data_integration_logs
    * @param {string} sourceType - Source type
+   * @param {string} integrationName - Integration name
+   * @param {string} message - Initial log message
    * @returns {Promise<string>} - Log record ID
    */
-  async createIntegrationLog(integrationName, sourceType) {
+  async createIntegrationLog(sourceType, integrationName, message = 'Integration started') {
     try {
+      // Step 1: Find or create the integration in frs_def_integrations
+      const integration = await this.findOrCreateIntegration(sourceType, integrationName);
+      
+      if (!integration || !integration.RecId) {
+        throw new Error('Failed to get or create integration record');
+      }
+      
+      // Step 2: Create the integration log with proper parent link
+      const logStartTime = new Date();
       const logPayload = {
-        IntegrationName: integrationName,
-        SourceType: sourceType,
-        StartTime: new Date().toISOString(),
-        Status: 'Running',
-        LogMessage: logger.getBufferedMessages()
+        ReadOnly: false,
+							   
+        StartTime: logStartTime.toJSON(),
+        LogType: 'InProgress',
+        Message: message,
+        ParentLink_RecID: integration.RecId,
+        ParentLink_Category: 'Frs_def_integration'
       };
 
       const endpoint = `${this.ivantiUrl}api/odata/businessobject/frs_data_integration_logs`;
       
-      const response = await executeWebRequest('POST', endpoint, logPayload, this.headers);
+      logger.logDebug('Creating integration log entry...');
+      const response = await executeWebRequest('POST', endpoint, logPayload, this.headers, 60000, { logPayload: false });
       
       if (response.status === 200 || response.status === 201) {
         const logRecId = response.data.RecId;
-        logger.logInfo(`Integration log created: ${logRecId}`);
+        logger.logInfo(`Integration log created: ${logRecId} (linked to integration: ${integration.RecId})`);
         return logRecId;
       } else {
-        logger.logWarning('Failed to create integration log');
+        logger.logWarning(`Failed to create integration log. Status: ${response.status}`);
         return null;
       }
     } catch (error) {
       logger.logError(`Error creating integration log: ${error.message}`);
-      return null;
+      // Re-throw the error to prevent the import from continuing without a log record
+      throw error;
     }
   }
 
   /**
    * Update integration log entry
    * @param {string} logRecId - Log record ID
-   * @param {object} updates - Fields to update
+   * @param {number} totalProcessed - Total assets processed
+   * @param {number} totalReceived - Total assets received
+   * @param {number} failedCount - Failed assets count
+   * @param {string} logType - Final log type ('Stats' or 'Error')
    * @returns {Promise<boolean>} - Success status
    */
-  async updateIntegrationLog(logRecId, updates) {
+  async updateIntegrationLog(logRecId, totalProcessed, totalReceived, failedCount, logType = 'Stats', durationSeconds = 0) {
     try {
-      updates.LogMessage = logger.getBufferedMessages();
+      if (!logRecId) {
+        logger.logWarning('No log record ID provided for update');
+        return false;
+      }
+
+      const logEndTime = new Date();
+      const updates = {
+        ReadOnly: true,
+        TotalProcessed: totalProcessed,
+        FailedCount: failedCount,
+        Message: `Integration completed. Processed: ${totalProcessed}, Received: ${totalReceived}, Failed: ${failedCount}\nLast Error: ${logger.getBufferedMessages() || 'None'}`,
+        EndTime: logEndTime.toJSON(),
+        LogType: logType,
+        TotalExecutionTime: durationSeconds
+      };
       
       const endpoint = `${this.ivantiUrl}api/odata/businessobject/frs_data_integration_logs('${logRecId}')`;
       
-      const response = await executeWebRequest('PATCH', endpoint, updates, this.headers);
+      logger.logDebug(`Updating integration log ${logRecId} with final statistics...`);
+      const response = await executeWebRequest('PUT', endpoint, updates, this.headers, 60000, { logPayload: false });
       
       if (response.status === 200 || response.status === 204) {
-        logger.logDebug('Integration log updated successfully');
+        logger.logInfo(`Integration log updated successfully (LogType: ${logType})`);
         return true;
       } else {
         logger.logWarning(`Failed to update integration log. Status: ${response.status}`);

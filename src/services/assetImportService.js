@@ -25,9 +25,10 @@ class AssetImportService {
    * @param {string} ivantiUrl - Ivanti ITSM URL
    * @param {string} ivantiApiKey - Ivanti API key
    * @param {string} integrationSourceType - Source type (vmware, ipfabric, snipeit, etc.)
-   * @returns {Promise<void>}
+   * @param {object} [integrationConfig] - Optional pre-fetched integration configuration
+   * @returns {Promise<object>} - The integration configuration
    */
-  async initialize(ivantiUrl, ivantiApiKey, integrationSourceType) {
+  async initialize(ivantiUrl, ivantiApiKey, integrationSourceType, integrationConfig = null) {
     try {
       logger.logInfo('═══════════════════════════════════════════════════════');
       logger.logInfo('  Initializing Asset Import Service');
@@ -37,29 +38,47 @@ class AssetImportService {
       logger.clearBuffer();
 
       // Reset stats
-      this.importStats = {
-        totalReceived: 0,
-        totalProcessed: 0,
-        totalFailed: 0,
-        startTime: new Date(),
-        endTime: null
-      };
+      this.importStats = { totalReceived: 0, totalProcessed: 0, totalFailed: 0, startTime: new Date(), endTime: null };
 
-      // Initialize Ivanti service
-      this.ivantiService = new IvantiService(ivantiUrl, ivantiApiKey);
-      logger.logInfo('Ivanti service initialized');
-
-      // Get integration configuration from Ivanti
-      const integrationConfig = await this.ivantiService.getIntegrationConfiguration(integrationSourceType);
-      
-      if (!integrationConfig) {
-        throw new Error(`Integration configuration not found for: ${integrationSourceType}`);
+      try {
+        // Initialize Ivanti service
+        this.ivantiService = new IvantiService(ivantiUrl, ivantiApiKey);
+        logger.logInfo('Ivanti service initialized');
+      } catch (err) {
+        logger.logError(`Ivanti service initialization failed: ${err.message}`);
+        throw err;
       }
 
-      logger.logInfo(`Integration Configuration: ${integrationConfig.IntegrationName || integrationSourceType}`);
+      // If config is not passed in, fetch it. Otherwise, use the provided one.
+      if (!integrationConfig) {
+        try {
+          logger.logDebug('Integration config not provided, fetching from Ivanti...');
+          integrationConfig = await this.ivantiService.getIntegrationConfiguration(integrationSourceType);
+          if (!integrationConfig) {
+            throw new Error(`Integration configuration not found for: ${integrationSourceType}`);
+          }
+        } catch (err) {
+          // If fetching the config fails, we can't continue.
+          const finalMessage = `Fetching integration configuration failed: ${err.message}`;
+          logger.logError(finalMessage);
+          throw err;
+        }
+      }
 
-      // Create source adapter
-      this.sourceAdapter = AdapterFactory.getAdapter(integrationSourceType, integrationConfig);
+      // Apply LOG_LEVEL from integration config if specified. This is now the first thing we do with the config.
+      if (integrationConfig.LOG_LEVEL) {
+        logger.logInfo(`Detected integrationConfig.LOG_LEVEL: "${integrationConfig.LOG_LEVEL}"`);
+        logger.setLogLevel(integrationConfig.LOG_LEVEL);
+      }
+
+      try {
+        // Create source adapter
+        this.sourceAdapter = AdapterFactory.getAdapter(integrationSourceType, integrationConfig);
+      } catch (err) {
+        logger.logError(`Creating source adapter failed: ${err.message}`);
+        throw err;
+      }
+
       this.sourceAdapter.logInfo();
 
       // Authenticate with source system
@@ -67,6 +86,7 @@ class AssetImportService {
       if (!authSuccess) {
         throw new Error(`Failed to authenticate with ${integrationSourceType}`);
       }
+
 
       return integrationConfig;
     } catch (error) {
@@ -87,12 +107,6 @@ class AssetImportService {
       // Store integration config for use in other methods
       this.integrationConfig = integrationConfig;
       
-      // Apply LOG_LEVEL from integration config if specified
-      if (integrationConfig.LOG_LEVEL) {
-        logger.setLogLevel(integrationConfig.LOG_LEVEL);
-        logger.logInfo(`Log level set to: ${integrationConfig.LOG_LEVEL}`);
-      }
-      
       logger.logInfo('Starting asset import process...');
 
       // Validate required fields
@@ -103,18 +117,21 @@ class AssetImportService {
         throw new Error('TenantId is required in integration configuration');
       }
 
-      // Create integration log
-      logRecId = await this.ivantiService.createIntegrationLog(
-        integrationConfig.IntegrationName || integrationConfig.IntegrationSourceType,
-        integrationConfig.IntegrationSourceType
-      );
+      // Create integration log only if not in dry run mode
+      if (!options.dryRun) {
+        logRecId = await this.ivantiService.createIntegrationLog(
+          integrationConfig.IntegrationSourceType,
+          integrationConfig.IntegrationName || integrationConfig.IntegrationSourceType,
+          'Asset import process started'
+        );
+      }
 
       // Get CI Types for this integration
       const ciTypes = await this.ivantiService.getCITypes(integrationConfig.RecId);
 
       if (ciTypes.length === 0) {
         logger.logWarning('No CI Types configured for this integration');
-        await this.finalizeLog(logRecId, 'Completed with warnings');
+        await this.finalizeLog(logRecId, 'Stats'); // No errors, but no CI Types either
         return this.importStats;
       }
 
@@ -125,7 +142,10 @@ class AssetImportService {
 
       // Finalize
       this.importStats.endTime = new Date();
-      await this.finalizeLog(logRecId, 'Completed');
+      
+      // Determine final log type based on failures
+      const finalLogType = this.importStats.totalFailed > 0 ? 'Error' : 'Stats'; // Still determine type for potential future use or if dryRun is false
+      await this.finalizeLog(logRecId, finalLogType);
 
       logger.logInfo('═══════════════════════════════════════════════════════');
       logger.logInfo('  Asset Import Completed');
@@ -140,7 +160,7 @@ class AssetImportService {
       logger.logError(`Asset import failed: ${error.message}`);
       this.importStats.endTime = new Date();
       // Ensure the log is updated to a failed state
-      await this.finalizeLog(logRecId, 'Failed');
+      await this.finalizeLog(logRecId, 'Error');
       throw error;
     }
   }
@@ -283,12 +303,23 @@ class AssetImportService {
     try {
       logger.logInfo(`Importing single asset: ${assetId}`);
 
+      // Create integration log only if not in dry run mode
+      if (!options.dryRun) {
+        this.logRecId = await this.ivantiService.createIntegrationLog(
+          integrationConfig.IntegrationSourceType,
+          integrationConfig.IntegrationName || integrationConfig.IntegrationSourceType,
+          `Single asset import for ID: ${assetId}`
+        );
+      }
+
       // Get the asset from source
       const asset = await this.sourceAdapter.getAssetById(assetId);
 
       if (!asset) {
         throw new Error(`Asset not found: ${assetId}`);
       }
+
+      this.importStats.totalReceived = 1;
 
       // Get CI Types
       const ciTypes = await this.ivantiService.getCITypes(integrationConfig.RecId);
@@ -304,6 +335,10 @@ class AssetImportService {
       // Process the asset
       await this.processAsset(asset, fieldMappings, ciType.CIType);
 
+      // Finalize log
+      this.importStats.endTime = new Date();
+      await this.finalizeLog(this.logRecId, 'Stats');
+
       logger.logInfo(`Single asset import completed for: ${assetId}`);
 
       return {
@@ -313,6 +348,10 @@ class AssetImportService {
         failed: this.importStats.totalFailed > 0
       };
     } catch (error) {
+      this.importStats.totalFailed = 1;
+      this.importStats.endTime = new Date();
+      await this.finalizeLog(this.logRecId, 'Error'); // Pass this.logRecId even if null
+
       logger.logError(`Single asset import failed: ${error.message}`);
       throw error;
     }
@@ -324,19 +363,25 @@ class AssetImportService {
    * @param {string} status - Final status
    * @returns {Promise<void>}
    */
-  async finalizeLog(logRecId, status) {
-    if (!logRecId) return;
+  async finalizeLog(logRecId, logType) {
+    if (!logRecId) {
+      logger.logWarning('No log record ID available for finalization');
+      return;
+    }
 
     try {
-      const duration = this.getDuration();
-      await this.ivantiService.updateIntegrationLog(logRecId, {
-        Status: status,
-        EndTime: new Date().toISOString(),
-        Duration: duration,
-        TotalReceived: this.importStats.totalReceived,
-        TotalProcessed: this.importStats.totalProcessed,
-        TotalFailed: this.importStats.totalFailed
-      });
+      const endTime = this.importStats.endTime || new Date();
+      const durationMs = endTime - this.importStats.startTime;
+      const durationSeconds = Math.floor(durationMs / 1000);
+      
+      await this.ivantiService.updateIntegrationLog(
+        logRecId,
+        this.importStats.totalProcessed,
+        this.importStats.totalReceived,
+        this.importStats.totalFailed,
+        logType,
+        durationSeconds
+      );
     } catch (error) {
       logger.logError(`Failed to finalize log: ${error.message}`);
     }

@@ -6,6 +6,7 @@ class HealthCheckPinger {
     this.intervalId = null;
     this.baseUrl = null; // Will be set during start()
     this.pingInterval = 5 * 60 * 1000; // 5 minutes
+    this.activeProcesses = 0;
     this.isRunning = false;
     this.pingCount = 0;
   }
@@ -13,17 +14,12 @@ class HealthCheckPinger {
   /**
    * Start the health check pinger
    * @param {string} baseUrl - Base URL of the service
-   */
-  start(baseUrl) {
+   */  
+  initialize(baseUrl) {
     // Check if health check is explicitly disabled via environment variable
     if (process.env.ENABLE_HEALTH_CHECK_PINGER === 'false') {
       logger.logInfo('Health check pinger is disabled by configuration.');
-      return;
-    }
-
-    if (this.isRunning) {
-      logger.logWarning('Health check pinger is already running.');
-      return;
+      return; // Do not initialize if disabled
     }
 
     // Make ping interval configurable via environment variable
@@ -32,18 +28,44 @@ class HealthCheckPinger {
       this.pingInterval = configuredIntervalMinutes * 60 * 1000;
     }
 
-    // Initialize state
     this.baseUrl = baseUrl;
+  }
+
+  /**
+   * Signals the start of a long-running process.
+   */
+  startProcess() {
+    if (!this.baseUrl) return; // Pinger not initialized or is disabled
+
+    this.activeProcesses++;
+    if (this.activeProcesses > 0) {
+      this.start();
+    }
+  }
+
+  /**
+   * Signals the end of a long-running process.
+   */
+  endProcess() {
+    if (!this.baseUrl) return; // Pinger not initialized or is disabled
+
+    this.activeProcesses = Math.max(0, this.activeProcesses - 1);
+    if (this.isRunning && this.activeProcesses === 0) {
+      this.stop();
+    }
+  }
+
+  start() {
+    // This is the definitive idempotency check.
+    // Only create the interval if one doesn't already exist.
+    if (this.intervalId) {
+      logger.logWarning('Pinger start() called, but an interval is already active. Ignoring.');
+      return;
+    }
+
     this.isRunning = true;
     this.pingCount = 0;
-
-    logger.logInfo(`Health check pinger started - will ping ${baseUrl}/health every 5 minutes`);
-
-    // Initial ping after 30 seconds
-    setTimeout(() => {
-      logger.logInfo('Performing initial health check ping...');
-      this.ping();
-    }, 30000);
+    logger.logInfo(`Health check pinger activated due to long-running process. Pinging every ${this.pingInterval / 60000} minutes.`);
 
     // Set up periodic pinging
     this.intervalId = setInterval(() => {
@@ -59,7 +81,7 @@ class HealthCheckPinger {
       clearInterval(this.intervalId);
       this.intervalId = null;
       this.isRunning = false;
-      logger.logInfo('Health check pinger stopped');
+      logger.logInfo('Health check pinger deactivated as all long-running processes have completed.');
     }
   }
 
@@ -67,20 +89,23 @@ class HealthCheckPinger {
    * Execute a health check ping
    */
   async ping() {
-    if (!this.baseUrl) {
-      return;
-    }
-
-    this.pingCount = (this.pingCount || 0) + 1;
-
+    // This try/catch is critical. Since ping() is called by setInterval, any unhandled
+    // promise rejection here will crash the app or cause Express error handlers to misfire.
+    // This block contains all errors within the pinger's own execution context.
     try {
+      if (!this.baseUrl) {
+        return;
+      }
+
+      this.pingCount = (this.pingCount || 0) + 1;
+
       const response = await axios.get(`${this.baseUrl}/health`, {
         timeout: 5000,
         validateStatus: () => true
       });
 
       if (response.status === 200) {
-        logger.logInfo(`Health check ping #${this.pingCount}: OK`); // Changed to debug for less verbose info logs
+        logger.logDebug(`Health check ping #${this.pingCount}: OK`);
       } else {
         logger.logWarning(`Health check ping #${this.pingCount} returned status: ${response.status}`);
       }
